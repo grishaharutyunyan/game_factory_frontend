@@ -1,0 +1,13 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Set at deploy time or in .env:
+      # - NEXT_PUBLIC_SOCKET_URL=https://your-ws.example.com
+      # - NEXT_PUBLIC_GAME_API_KEY=your-api-key
+    restart: unless-stopped
