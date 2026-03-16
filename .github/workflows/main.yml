@@ -1,0 +1,42 @@
+name: Deploy Cactus App Frontend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # Go to app folder
+            cd ~/apps/game_factory_backend
+
+            # Clean local changes
+            git reset --hard
+            git clean -fd
+
+            # Pull latest code
+            git pull origin main
+
+            # Install dependencies and build
+            npm install
+            npm run build
+
+            # Reload if PM2 process exists, else start it
+            if pm2 list | grep -q game_service_backend; then
+              pm2 reload game_service_backend
+            else
+              pm2 start dist/main.js --name game_service_backend
+            fi
+
+            # Save PM2 process list
+            pm2 save
