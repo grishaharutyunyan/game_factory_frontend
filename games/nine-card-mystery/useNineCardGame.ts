@@ -197,8 +197,43 @@ export const useNineCardGame = (token: string, sessionId: string) => {
             playSound('lose');
         });
 
-        return () => {
+        // Emit leave_game then disconnect (backend deletes session and disconnects).
+        const sendLeaveAndDisconnect = () => {
+            try {
+                if (socket.connected) {
+                    socket.emit('leave_game');
+                }
+            } catch {
+                // ignore emit errors on teardown
+            }
             socket.disconnect();
+        };
+
+        // When tab/window/iframe is closed or user navigates away
+        const handlePageUnload = () => {
+            sendLeaveAndDisconnect();
+        };
+
+        // When parent page tells iframe to close (e.g. before removing iframe)
+        const handleParentMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'GAME_CLOSE') {
+                sendLeaveAndDisconnect();
+            }
+        };
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('pagehide', handlePageUnload);
+            window.addEventListener('beforeunload', handlePageUnload);
+            window.addEventListener('message', handleParentMessage);
+        }
+
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('pagehide', handlePageUnload);
+                window.removeEventListener('beforeunload', handlePageUnload);
+                window.removeEventListener('message', handleParentMessage);
+            }
+            sendLeaveAndDisconnect();
         };
     }, [token, sessionId, playSound]);
 
