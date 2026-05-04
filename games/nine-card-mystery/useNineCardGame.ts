@@ -1,14 +1,32 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { CardType, GameStatus, GameState, GameConfigPayload, FreebetStatusPayload, GameStartedPayload } from './types';
+import { createWebSocketClient } from '@/lib/websocket-client';
+import type { ServerEvents } from '@/types/websocket';
+import {
+    BalanceType,
+    CardType,
+    GameStatus,
+    GameState,
+    GameConfigPayload,
+    FreebetStatusPayload,
+    FreebetGrant,
+} from './types';
 import { useGameSound } from './useGameSound';
 
-// Default initial state
-const initialState: GameState = {
+type ConnectedPayload = Parameters<ServerEvents['connected']>[0];
+type GameStartedEvent = Parameters<ServerEvents['game_started']>[0];
+type GameResultEvent = Parameters<ServerEvents['game_result']>[0];
+type BalanceSwitchedEvent = Parameters<ServerEvents['balance_switched']>[0];
+
+const emptyCards = (): CardType[] => Array(9).fill(null) as unknown as CardType[];
+
+const baseInitialState: GameState = {
     status: GameStatus.LOADING,
     balance: 0,
+    realBalance: 0,
+    bonusBalance: 0,
+    activeBalanceType: BalanceType.REAL,
     bet: 10,
-    cards: Array(9).fill(null) as any, // Initially unknown
+    cards: emptyCards(),
     selectedIndices: [],
     roundId: null,
     winAmount: 0,
@@ -18,203 +36,323 @@ const initialState: GameState = {
     expiresAt: 0,
 };
 
+function initialGameState(): GameState {
+    if (!process.env.NEXT_PUBLIC_GAME_API_KEY) {
+        return {
+            ...baseInitialState,
+            error: 'Game API key is not configured.',
+            status: GameStatus.LOADING,
+        };
+    }
+    return { ...baseInitialState };
+}
+
 /** Error message shown when server rejects or never accepts the session */
 export const INVALID_SESSION_MESSAGE = 'Invalid or expired session. Please open the game again with a valid session link.';
 
-export const useNineCardGame = (token: string, sessionId: string) => {
-    const [state, setState] = useState<GameState>(initialState);
-    const socketRef = useRef<Socket | null>(null);
+/** Hot reload, tab sleep, or flaky network — not necessarily a bad ?session= id */
+const CONNECTION_LOST_MESSAGE =
+    'Connection was interrupted (network or reload). Wait a moment and try again, or reopen the game from your lobby with a fresh link.';
+
+function isLikelyNetworkOrReloadDisconnect(reason: string): boolean {
+    const r = reason.toLowerCase();
+    return (
+        r.includes('ping timeout') ||
+        r.includes('transport') ||
+        r.includes('forced server') ||
+        r.includes('forced client') ||
+        r.includes('parse error') ||
+        r.includes('websocket') ||
+        r === 'timeout'
+    );
+}
+
+function wsBalanceTypeToEnum(v: 'REAL' | 'BONUS' | undefined, fallback: BalanceType): BalanceType {
+    if (v === 'BONUS') return BalanceType.BONUS;
+    if (v === 'REAL') return BalanceType.REAL;
+    return fallback;
+}
+
+export const useNineCardGame = (_token: string, sessionId: string) => {
+    const [state, setState] = useState<GameState>(initialGameState);
+    const clientRef = useRef<ReturnType<typeof createWebSocketClient> | null>(null);
     const connectedOnceRef = useRef(false);
+    /** Bumps on effect cleanup so deferred connect skips after React Strict Mode's fake unmount. */
+    const connectGenRef = useRef(0);
     const { playSound, toggleSound, soundEnabled } = useGameSound();
 
     useEffect(() => {
         connectedOnceRef.current = false;
-        const url = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4444';
         const apiKey = process.env.NEXT_PUBLIC_GAME_API_KEY;
-
         if (!apiKey) {
-            setState(prev => ({ ...prev, error: 'Game API key is not configured.', status: GameStatus.LOADING }));
             return;
         }
 
-        // Connect with auth and query.session
-        // Backend WsAuthGuard checks query['apiKey'] or query['x-api-key'] or headers
-        const socket = io(url, {
-            transports: ['websocket'],
-            auth: {
-                apiKey: apiKey,
-            },
-            query: {
-                session: sessionId,
-                apiKey: apiKey,
-            },
-            extraHeaders: {
-                "x-api-key": apiKey || "",
-            }
-        });
+        const url = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4444';
 
-        socketRef.current = socket;
+        let client: ReturnType<typeof createWebSocketClient>;
+        try {
+            client = createWebSocketClient({ apiKey, url });
+        } catch {
+            queueMicrotask(() => {
+                setState((prev) => ({
+                    ...prev,
+                    error: 'Failed to initialize WebSocket client.',
+                    status: GameStatus.LOADING,
+                }));
+            });
+            return;
+        }
 
-        socket.on('connect', () => {
-            // Connection established; server may still reject session via disconnect/error
-        });
+        clientRef.current = client;
+        const socket = client.socket;
+
         socket.onAny((event, ...args) => {
             if (process.env.NODE_ENV === 'development') {
-                console.log("[EVENT RECEIVED]", event, args);
+                console.log('[EVENT RECEIVED]', event, args);
             }
         });
 
-        socket.on('connect_error', (err) => {
-            setState(prev => ({
+        const onConnectError = (err: Error) => {
+            setState((prev) => ({
                 ...prev,
                 status: GameStatus.LOADING,
-                error: err.message?.toLowerCase().includes('session') ? INVALID_SESSION_MESSAGE : `Connection failed: ${err.message || 'Unknown error'}`,
+                error: err.message?.toLowerCase().includes('session')
+                    ? INVALID_SESSION_MESSAGE
+                    : `Connection failed: ${err.message || 'Unknown error'}`,
             }));
-        });
+        };
 
-        socket.on('disconnect', (reason) => {
+        socket.on('connect_error', onConnectError);
+
+        const onDisconnect = (reason: string) => {
             if (connectedOnceRef.current) return;
-            setState(prev => ({
+            // Our own teardown (Strict Mode, unmount, reconnect) — not user-facing.
+            if (reason === 'io client disconnect') {
+                return;
+            }
+            // Server closed the socket before `connected` — often invalid session / API key.
+            if (reason === 'io server disconnect') {
+                setState((prev) => ({
+                    ...prev,
+                    error: INVALID_SESSION_MESSAGE,
+                    status: GameStatus.LOADING,
+                }));
+                return;
+            }
+            setState((prev) => ({
                 ...prev,
-                error: reason === 'io server disconnect' || reason === 'io client disconnect'
-                    ? prev.error
+                error: isLikelyNetworkOrReloadDisconnect(reason)
+                    ? CONNECTION_LOST_MESSAGE
                     : INVALID_SESSION_MESSAGE,
                 status: GameStatus.LOADING,
             }));
-        });
+        };
 
-        socket.on('connected', (data: { balance: number, config?: any }) => {
+        socket.on('disconnect', onDisconnect);
+
+        const onConnected = (data: ConnectedPayload) => {
             connectedOnceRef.current = true;
 
-            // Extract freebet config if available
-            let freebetEnabled = false;
-            if (data.config) {
-                freebetEnabled = !!data.config.freebetEnabled;
-            }
+            const freebetEnabled = !!data.config?.freebetEnabled;
 
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 status: GameStatus.IDLE,
                 balance: data.balance,
+                realBalance: data.realBalance ?? data.balance,
+                bonusBalance: data.bonusBalance ?? 0,
+                activeBalanceType: wsBalanceTypeToEnum(data.activeBalanceType, prev.activeBalanceType),
                 error: undefined,
-                freebetEnabled
+                freebetEnabled,
             }));
 
-            // If config wasn't in connected (or just to be safe/synchronize), we *could* still ask,
-            // but the spec says "Option A: ... Use config.freebetEnabled from there."
-            // "Option B: ... socket.emit('get_game_config')"
-            // We'll stick to: if we got it, great. If not, maybe ask? 
-            // For now, let's keep the get_game_config call as a fallback or for refresh, 
-            // but we can rely on the data.config if present.
-            // Actually, to be robust: if we didn't get config, ask for it.
             if (!data.config) {
-                socket.emit('get_game_config');
+                void client.getGameConfig().catch(() => {});
             } else if (freebetEnabled) {
-                // If we got config and it's enabled, immediately fetch status
-                socket.emit('get_freebet_status');
+                void client.getFreebetStatus().catch(() => {});
             }
-        });
+        };
 
-        socket.on('game_config', (data: GameConfigPayload) => {
+        client.on('connected', onConnected);
+
+        const onGameConfig = (data: GameConfigPayload) => {
             const freebetEnabled = !!data.freebetEnabled;
-            setState(prev => ({ ...prev, freebetEnabled }));
-            if (freebetEnabled) socket.emit('get_freebet_status');
-        });
+            setState((prev) => ({ ...prev, freebetEnabled }));
+            if (freebetEnabled) void client.getFreebetStatus().catch(() => {});
+        };
 
-        socket.on('freebet_status', (data: FreebetStatusPayload) => {
-            setState(prev => ({
+        client.on('game_config', onGameConfig);
+
+        const onFreebetStatus = (data: FreebetStatusPayload) => {
+            setState((prev) => ({
                 ...prev,
                 remainingFreebets: data.remainingFreebets ?? 0,
-                freebetGrants: data.freebetGrants ?? [],
+                freebetGrants: (data.freebetGrants ?? []) as FreebetGrant[],
             }));
-        });
+        };
 
-        socket.on('game_started', (data: GameStartedPayload) => {
+        client.on('freebet_status', onFreebetStatus);
+
+        const onGameStarted = (data: GameStartedEvent) => {
             const expiresAt = data.expiresAt || (Date.now() + (data.timer || 30) * 1000);
 
-            setState(prev => ({
+            setState((prev) => ({
                 ...prev,
                 status: GameStatus.PLAYING,
                 roundId: data.roundId,
                 balance: data.balance,
-                cards: Array(9).fill(null) as any, // Reset cards
+                realBalance: data.realBalance ?? prev.realBalance,
+                bonusBalance: data.bonusBalance ?? prev.bonusBalance,
+                activeBalanceType: data.activeBalanceType
+                    ? wsBalanceTypeToEnum(data.activeBalanceType, prev.activeBalanceType)
+                    : prev.activeBalanceType,
+                cards: emptyCards(),
                 selectedIndices: [],
                 winAmount: 0,
                 message: 'Pick 3 cards!',
                 timer: data.timer || 30,
-                expiresAt: expiresAt,
+                expiresAt,
                 isFreeBet: !!data.isFreeBet,
                 error: undefined,
             }));
-            playSound('start'); // Play start sound
-        });
+            playSound('start');
+        };
 
-        socket.on('action_result', (data: { selected: number[], canSubmit: boolean }) => {
-            setState(prev => ({
+        client.on('game_started', onGameStarted);
+
+        const onRoundRestored = (data: Parameters<ServerEvents['round_restored']>[0]) => {
+            const expiresAt =
+                data.expiresAt || (Date.now() + (data.timer ?? 30) * 1000);
+
+            setState((prev) => ({
+                ...prev,
+                status: GameStatus.PLAYING,
+                roundId: data.roundId,
+                bet: data.bet,
+                balance: prev.balance,
+                cards: emptyCards(),
+                selectedIndices: [],
+                winAmount: 0,
+                message: 'Pick 3 cards!',
+                timer: data.timer ?? 30,
+                expiresAt,
+                isFreeBet: !!data.isFreeBet,
+                error: undefined,
+            }));
+        };
+
+        client.on('round_restored', onRoundRestored);
+
+        const onRoundAutoResolved = (data: Parameters<ServerEvents['round_auto_resolved']>[0]) => {
+            setState((prev) => ({
+                ...prev,
+                status: GameStatus.IDLE,
+                roundId: null,
+                balance: data.newBalance,
+                realBalance: data.realBalance ?? prev.realBalance,
+                bonusBalance: data.bonusBalance ?? prev.bonusBalance,
+                activeBalanceType: data.activeBalanceType
+                    ? wsBalanceTypeToEnum(data.activeBalanceType, prev.activeBalanceType)
+                    : prev.activeBalanceType,
+                message: data.message,
+                error: undefined,
+            }));
+            playSound('lose');
+        };
+
+        client.on('round_auto_resolved', onRoundAutoResolved);
+
+        const onActionResult = (data: { selected: number[]; canSubmit: boolean }) => {
+            setState((prev) => ({
                 ...prev,
                 selectedIndices: data.selected,
             }));
 
-            // Auto-finish if 3 selected? 
-            // Backend: logic says "processAction" updates implementation. 
-            // If we have 3, we usually trigger finish or backend might.
-            // Looking at backend: "processAction" just updates selection. 
-            // User must call "finish_game" to end it? 
-            // User code: "@SubscribeMessage('finish_game')" exists.
-
             if (data.canSubmit && data.selected.length === 3) {
-                // Automatically finish for smoother UX or let user click?
-                // Let's auto-finish after short delay for effect
                 setTimeout(() => {
-                    socket.emit('finish_game');
+                    void clientRef.current?.finishGame().catch(() => {});
                 }, 500);
             }
-        });
+        };
 
-        socket.on('game_result', (data: any) => {
-            // data contains full results directly (backend spreads result.data)
-            const fullCards = data.cards || [];
+        client.on('action_result', onActionResult);
 
-            setState(prev => ({
+        const onGameResult = (data: GameResultEvent) => {
+            const fullCards = (data.cards as CardType[] | undefined) || [];
+
+            setState((prev) => ({
                 ...prev,
                 status: GameStatus.FINISHED,
                 winAmount: data.winAmount,
                 message: data.message,
                 balance: data.newBalance,
+                realBalance: data.realBalance ?? prev.realBalance,
+                bonusBalance: data.bonusBalance ?? prev.bonusBalance,
+                activeBalanceType: data.activeBalanceType
+                    ? wsBalanceTypeToEnum(data.activeBalanceType, prev.activeBalanceType)
+                    : prev.activeBalanceType,
                 cards: fullCards,
-                selectedIndices: data.selected || prev.selectedIndices,
+                selectedIndices: (data.selected as number[] | undefined) || prev.selectedIndices,
             }));
 
-            // Refresh freebet count after round (if freebet was used)
-            socket.emit('get_freebet_status');
+            void client.getFreebetStatus().catch(() => {});
             if (data.winAmount > 0) playSound('win');
-            else playSound('lose'); // Use lose sound for all losses (bomb or otherwise)
-        });
+            else playSound('lose');
+        };
 
-        socket.on('error', (err: { message: string }) => {
+        client.on('game_result', onGameResult);
+
+        const onServerError = (err: { code?: string; message: string }) => {
             const msg = err?.message || 'Something went wrong.';
-            setState(prev => ({ ...prev, error: msg, message: msg }));
+            setState((prev) => ({ ...prev, error: msg, message: msg }));
             playSound('lose');
+        };
+
+        client.on('error', onServerError);
+
+        const onBalanceSwitched = (data: BalanceSwitchedEvent) => {
+            setState((prev) => ({
+                ...prev,
+                balance: data.balance,
+                realBalance: data.realBalance ?? prev.realBalance,
+                bonusBalance: data.bonusBalance ?? prev.bonusBalance,
+                activeBalanceType: wsBalanceTypeToEnum(data.activeBalanceType, prev.activeBalanceType),
+                error: undefined,
+            }));
+        };
+
+        client.on('balance_switched', onBalanceSwitched);
+
+        const myConnectGen = ++connectGenRef.current;
+        queueMicrotask(() => {
+            if (connectGenRef.current !== myConnectGen) return;
+            void client.connect(sessionId).catch((err: Error) => {
+                setState((prev) => ({
+                    ...prev,
+                    status: GameStatus.LOADING,
+                    error: err.message?.toLowerCase().includes('session')
+                        ? INVALID_SESSION_MESSAGE
+                        : `Connection failed: ${err.message || 'Unknown error'}`,
+                }));
+            });
         });
 
-        // Emit leave_game then disconnect (backend deletes session and disconnects).
         const sendLeaveAndDisconnect = () => {
             try {
                 if (socket.connected) {
-                    socket.emit('leave_game');
+                    (socket.emit as (ev: string, ...args: unknown[]) => void)('leave_game');
                 }
             } catch {
-                // ignore emit errors on teardown
+                // ignore
             }
             socket.disconnect();
         };
 
-        // When tab/window/iframe is closed or user navigates away
         const handlePageUnload = () => {
             sendLeaveAndDisconnect();
         };
 
-        // When parent page tells iframe to close (e.g. before removing iframe)
         const handleParentMessage = (event: MessageEvent) => {
             if (event.data?.type === 'GAME_CLOSE') {
                 sendLeaveAndDisconnect();
@@ -228,16 +366,32 @@ export const useNineCardGame = (token: string, sessionId: string) => {
         }
 
         return () => {
+            connectGenRef.current += 1;
+
             if (typeof window !== 'undefined') {
                 window.removeEventListener('pagehide', handlePageUnload);
                 window.removeEventListener('beforeunload', handlePageUnload);
                 window.removeEventListener('message', handleParentMessage);
             }
-            sendLeaveAndDisconnect();
-        };
-    }, [token, sessionId, playSound]);
 
-    // Timer countdown effect
+            socket.off('connect_error', onConnectError);
+            socket.off('disconnect', onDisconnect);
+            client.off('connected', onConnected);
+            client.off('game_config', onGameConfig);
+            client.off('freebet_status', onFreebetStatus);
+            client.off('game_started', onGameStarted);
+            client.off('round_restored', onRoundRestored);
+            client.off('round_auto_resolved', onRoundAutoResolved);
+            client.off('action_result', onActionResult);
+            client.off('game_result', onGameResult);
+            client.off('error', onServerError);
+            client.off('balance_switched', onBalanceSwitched);
+
+            sendLeaveAndDisconnect();
+            clientRef.current = null;
+        };
+    }, [sessionId]);
+
     useEffect(() => {
         let interval: NodeJS.Timeout;
 
@@ -246,12 +400,11 @@ export const useNineCardGame = (token: string, sessionId: string) => {
                 const now = Date.now();
                 const remaining = Math.max(0, Math.ceil((state.expiresAt! - now) / 1000));
 
-                setState(prev => ({ ...prev, timer: remaining }));
+                setState((prev) => ({ ...prev, timer: remaining }));
 
                 if (remaining <= 0) {
-                    setState(prev => ({ ...prev, message: "Time's up!" }));
+                    setState((prev) => ({ ...prev, message: "Time's up!" }));
                     clearInterval(interval);
-                    // Optionally auto-finish or let user click to finish (if backend allows grace period)
                 }
             }, 1000);
         }
@@ -259,47 +412,120 @@ export const useNineCardGame = (token: string, sessionId: string) => {
         return () => clearInterval(interval);
     }, [state.status, state.expiresAt]);
 
-    const startGame = useCallback((useFreeBet?: boolean) => {
-        if (!socketRef.current) return;
-        // Clear previous errors
-        setState(prev => ({ ...prev, error: undefined, message: '' }));
-        const grant = state.freebetGrants?.[0];
-        const payload: { bet: number; freeBet?: boolean; freebetGrantId?: string } = {
-            bet: useFreeBet === true && grant ? grant.amount : state.bet,
-        };
-        if (useFreeBet === true && grant) {
-            payload.freeBet = true;
-            payload.freebetGrantId = grant.id;
-            // Backend requires bet to equal grant.amount from DB; we send grant.amount
+    const startGame = useCallback(
+        async (useFreeBet?: boolean, balanceType?: BalanceType) => {
+            const client = clientRef.current;
+            if (!client) return;
+            setState((prev) => ({ ...prev, error: undefined, message: '' }));
+            const grant = state.freebetGrants?.[0];
+            const payload = {
+                bet: useFreeBet === true && grant ? grant.amount : state.bet,
+                balanceType: (balanceType ?? state.activeBalanceType) as 'REAL' | 'BONUS',
+            };
+            if (useFreeBet === true && grant) {
+                Object.assign(payload, {
+                    freeBet: true,
+                    freebetGrantId: grant.id,
+                });
+            }
+            try {
+                await client.startGame(payload);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : 'Start game failed.';
+                const last = client.getLastError();
+                setState((prev) => ({
+                    ...prev,
+                    error: last?.message ?? msg,
+                    message: last?.message ?? msg,
+                }));
+            }
+        },
+        [state.bet, state.freebetGrants, state.activeBalanceType],
+    );
+
+    const switchBalance = useCallback(async (balanceType: BalanceType) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((prev) => ({ ...prev, error: undefined, message: '' }));
+        try {
+            await client.switchBalance(balanceType === BalanceType.BONUS ? 'BONUS' : 'REAL');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Switch balance failed.';
+            const last = client.getLastError();
+            setState((prev) => ({
+                ...prev,
+                error: last?.message ?? msg,
+            }));
         }
-        socketRef.current.emit('start_game', payload);
-    }, [state.bet, state.freebetGrants]);
+    }, []);
 
-    const selectCard = useCallback((index: number) => {
-        if (!socketRef.current || state.status !== GameStatus.PLAYING) return;
-        if (state.selectedIndices.includes(index)) return; // Already selected
-        if (state.selectedIndices.length >= 3) return; // Max 3
+    const selectCard = useCallback(
+        async (index: number) => {
+            const client = clientRef.current;
+            if (!client || state.status !== GameStatus.PLAYING) return;
+            if (state.selectedIndices.includes(index)) return;
+            if (state.selectedIndices.length >= 3) return;
 
-        playSound('click');
-        socketRef.current.emit('game_action', { position: index });
-    }, [state.status, state.selectedIndices, playSound]);
+            playSound('click');
+            try {
+                await client.gameAction({ position: index });
+            } catch {
+                // No active round or disconnected; ignore click
+            }
+        },
+        [state.status, state.selectedIndices, playSound],
+    );
 
     const setBet = useCallback((amount: number) => {
-        setState(prev => ({ ...prev, bet: amount, error: undefined }));
+        setState((prev) => ({ ...prev, bet: amount, error: undefined }));
     }, []);
 
     const reset = useCallback(() => {
-        setState(prev => ({ ...prev, status: GameStatus.IDLE, message: '', error: undefined, isFreeBet: false }));
-        // Refresh freebet count when user returns to bet screen (spec §5)
-        if (socketRef.current) socketRef.current.emit('get_freebet_status');
+        setState((prev) => ({
+            ...prev,
+            status: GameStatus.IDLE,
+            message: '',
+            error: undefined,
+            isFreeBet: false,
+        }));
+        void clientRef.current?.getFreebetStatus().catch(() => {});
+    }, []);
+
+    const closeGame = useCallback(() => {
+        try {
+            clientRef.current?.disconnect();
+        } catch {
+            // ignore
+        }
+        if (typeof window === 'undefined') return;
+
+        // Embedded: parent is expected to remove the iframe / shell.
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: 'GAME_CLOSE' }, '*');
+            return;
+        }
+
+        // Popups opened via window.open() may close; normal tabs ignore close().
+        window.close();
+
+        // Universal fallback when the tab stays open (most direct visits).
+        queueMicrotask(() => {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.assign('/');
+            }
+        });
     }, []);
 
     return {
         state,
         startGame,
+        switchBalance,
         selectCard,
         setBet,
         reset,
+        closeGame,
         soundEnabled,
         toggleSound,
     };

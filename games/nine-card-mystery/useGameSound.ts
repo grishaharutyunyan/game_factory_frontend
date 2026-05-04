@@ -13,6 +13,9 @@ const SOUND_SOURCES: Record<SoundType, string[]> = {
 
 export const useGameSound = () => {
     const [soundEnabled, setSoundEnabled] = useState(true);
+    /** Keeps latest mute state without changing `playSound` identity (avoids WebSocket effect teardown on toggle). */
+    const soundEnabledRef = useRef(soundEnabled);
+    soundEnabledRef.current = soundEnabled;
 
     const soundsRef = useRef<Record<SoundType, Howl | null>>({
         click: null,
@@ -64,12 +67,18 @@ export const useGameSound = () => {
     }, []);
 
     const playSound = useCallback((type: SoundType) => {
-        if (!soundEnabled) return;
+        if (!soundEnabledRef.current) return;
         const sound = soundsRef.current[type];
         if (sound) sound.play();
-    }, [soundEnabled]);
+    }, []);
 
-    const toggleSound = () => setSoundEnabled(prev => !prev);
+    const toggleSound = useCallback(() => {
+        // User gesture: unlock/resume Web Audio (Safari often suspends until interaction).
+        if (Howler.ctx?.state === "suspended") {
+            void Howler.ctx.resume();
+        }
+        setSoundEnabled((prev) => !prev);
+    }, []);
 
     return {
         soundEnabled,
