@@ -18,7 +18,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             # Go to app folder
-            cd ~/apps/game_factory_backend
+            cd ~/apps/game_factory_frontend
 
             # Clean local changes
             git reset --hard
@@ -35,7 +35,7 @@ jobs:
             if pm2 list | grep -q game_service_backend; then
               pm2 reload game_service_backend
             else
-              pm2 start dist/main.js --name game_service_backend
+              pm2 start dist/main.js --name game_service_frontend
             fi
 
             # Save PM2 process list
