@@ -32,8 +32,8 @@ jobs:
             npm run build
 
             # Reload if PM2 process exists, else start it
-            if pm2 list | grep -q game_service_backend; then
-              pm2 reload game_service_backend
+            if pm2 list | grep -q game_service_frontend; then
+              pm2 reload game_service_frontend
             else
               pm2 start dist/main.js --name game_service_frontend
             fi
