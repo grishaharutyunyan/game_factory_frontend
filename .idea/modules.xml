@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/game-factory-frontend.iml" filepath="$PROJECT_DIR$/.idea/game-factory-frontend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../game_service_backend/.idea/papi-backend-main.iml" filepath="$PROJECT_DIR$/../game_service_backend/.idea/papi-backend-main.iml" />
     </modules>
   </component>
 </project>

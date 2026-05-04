@@ -12,9 +12,17 @@ export enum GameStatus {
     FINISHED = 'finished',
 }
 
+export enum BalanceType {
+    REAL = 'REAL',
+    BONUS = 'BONUS',
+}
+
 export interface GameState {
     status: GameStatus;
     balance: number;
+    realBalance: number;
+    bonusBalance: number;
+    activeBalanceType: BalanceType;
     bet: number;
     cards: CardType[]; // Full array of 9 cards (revealed at end)
     selectedIndices: number[];
@@ -55,6 +63,9 @@ export interface GameHistoryItem {
 
 export interface ConnectPayload {
     balance: number;
+    realBalance?: number;
+    bonusBalance?: number;
+    activeBalanceType?: BalanceType;
     userId: string;
     gameId: string;
     config: any;
@@ -79,6 +90,9 @@ export interface FreebetStatusPayload {
 export interface GameStartedPayload {
     roundId: string;
     balance: number;
+    realBalance?: number;
+    bonusBalance?: number;
+    activeBalanceType?: BalanceType;
     seedHash?: string;
     expiresAt?: number;
     timer?: number;
@@ -96,9 +110,19 @@ export interface GameResultPayload {
     winAmount: number;
     message: string;
     newBalance: number;
+    realBalance?: number;
+    bonusBalance?: number;
+    activeBalanceType?: BalanceType;
     data: {
         cards: CardType[];
         selected: number[];
         seed: string;
     };
+}
+
+export interface BalanceSwitchedPayload {
+    balance: number;
+    realBalance: number;
+    bonusBalance: number;
+    activeBalanceType: BalanceType;
 }

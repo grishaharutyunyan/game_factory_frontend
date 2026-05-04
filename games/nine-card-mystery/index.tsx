@@ -1,29 +1,20 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useNineCardGame } from './useNineCardGame';
 import { Board } from './components/Board';
 import { Controls } from './components/Controls';
 import { Timer } from './components/Timer';
 import { CactusLoader } from './components/CactusLoader';
-import { GameStatus } from './types';
+import { BalanceType, GameStatus } from './types';
 import { INVALID_SESSION_MESSAGE } from './useNineCardGame';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, VolumeX, Info } from 'lucide-react';
 
 const GameWrapper = () => {
-    const [sessionId, setSessionId] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const sess = params.get('session');
-            if (sess) setSessionId(sess);
-            else {
-                console.warn("No session ID found in URL");
-            }
-        }
-    }, []);
+    const searchParams = useSearchParams();
+    const sessionId = searchParams.get('session')?.trim() || null;
 
     if (!sessionId) {
         return (
@@ -43,7 +34,7 @@ const NineCardMysteryGame = ({ sessionId }: { sessionId: string }) => {
     // Token is usually for auth, maybe same as session or from cookies.
     // Passing 'demo-token' for now.
     const {
-        state, startGame, selectCard, setBet, reset,
+        state, startGame, switchBalance, selectCard, setBet, reset, closeGame,
         soundEnabled, toggleSound
     } = useNineCardGame('demo-token', sessionId);
     const [showModal, setShowModal] = useState(false);
@@ -116,10 +107,11 @@ const NineCardMysteryGame = ({ sessionId }: { sessionId: string }) => {
                                     </button>
                                 )}
                                 <button
-                                    onClick={() => window.location.reload()}
+                                    type="button"
+                                    onClick={closeGame}
                                     className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold transition-colors"
                                 >
-                                    Reload Game
+                                    Close Game
                                 </button>
                             </div>
                         </motion.div>
@@ -344,9 +336,15 @@ const NineCardMysteryGame = ({ sessionId }: { sessionId: string }) => {
                         <Controls
                             bet={state.bet}
                             setBet={setBet}
-                            onStart={startGame}
+                            onStart={(useFreebet) =>
+                                startGame(useFreebet === true, state.activeBalanceType)
+                            }
+                            onSwitchBalance={(type: BalanceType) => switchBalance(type)}
                             status={state.status}
                             balance={state.balance}
+                            realBalance={state.realBalance}
+                            bonusBalance={state.bonusBalance}
+                            activeBalanceType={state.activeBalanceType}
                             message={state.message}
                             winAmount={state.winAmount}
                             error={state.error}
@@ -354,11 +352,16 @@ const NineCardMysteryGame = ({ sessionId }: { sessionId: string }) => {
                             toggleSound={toggleSound}
                             setShowPayouts={setShowPayouts}
                             timer={state.timer}
+                            isFreeBet={state.isFreeBet}
+                            freebetEnabled={state.freebetEnabled}
+                            remainingFreebets={state.remainingFreebets}
+                            freebetGrant={state.freebetGrants?.[0]}
                         />
 
                         {/* Sound Controls & Info Button - Desktop Only */}
                         <div className="mt-6 hidden lg:flex gap-3">
                             <motion.button
+                                type="button"
                                 onClick={() => setShowPayouts(true)}
                                 className="flex-1 p-4 rounded-xl transition-colors border-2 border-purple-500/40 bg-gradient-to-br from-purple-900/60 to-purple-800/50 text-purple-300 hover:from-purple-800/70 hover:to-purple-700/60 hover:border-purple-400/60 backdrop-blur-sm font-bold flex items-center justify-center gap-2"
                                 whileHover={{ scale: 1.02, y: -2 }}
@@ -368,6 +371,7 @@ const NineCardMysteryGame = ({ sessionId }: { sessionId: string }) => {
                                 <span>Payouts</span>
                             </motion.button>
                             <motion.button
+                                type="button"
                                 onClick={toggleSound}
                                 className={`flex-1 p-4 rounded-xl transition-colors border-2 backdrop-blur-sm font-bold flex items-center justify-center gap-2
                                 ${soundEnabled
