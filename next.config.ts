@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const frameAncestorOrigin = process.env.NEXT_PUBLIC_FRAME_ANCESTOR_ORIGIN
+
 const nextConfig: NextConfig = {
     // Production
     reactStrictMode: true,
@@ -57,8 +59,8 @@ const nextConfig: NextConfig = {
                 source: "/(.*)",
                 headers: [
                     {
-                        key: "X-Frame-Options",
-                        value: "SAMEORIGIN",
+                        key: "Content-Security-Policy",
+                        value: `frame-ancestors 'self' ${frameAncestorOrigin}`,
                     },
                     {
                         key: "X-Content-Type-Options",
