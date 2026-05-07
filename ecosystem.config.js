@@ -1,3 +1,6 @@
+// PM2 evaluates this file as JS, so we can resolve paths relative to the file
+// itself. That way the same config works on any server / user
+// (e.g. /home/devgrhar/apps/game_factory_frontend, /var/www/..., etc.).
 const path = require('path');
 
 module.exports = {
@@ -5,8 +8,6 @@ module.exports = {
     {
       name: 'game_frontend',
 
-      // Always run from the directory this ecosystem file lives in,
-      // so deploys to ~/apps/game_factory_frontend, /var/www/..., etc. all work.
       cwd: __dirname,
 
       script: path.join(__dirname, '.next/standalone/server.js'),
@@ -25,9 +26,9 @@ module.exports = {
         HOSTNAME: '0.0.0.0',
       },
 
-      error_file: '/var/log/cherry/error.log',
-      out_file: '/var/log/cherry/out.log',
-      log_file: '/var/log/cherry/combined.log',
+      error_file: '/var/log/game/error.log',
+      out_file: '/var/log/game/out.log',
+      log_file: '/var/log/game/combined.log',
       time: true,
     },
   ],

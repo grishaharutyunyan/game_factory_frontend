@@ -1,4 +1,4 @@
-name: Deploy Game Factory Frontend
+name: Deploy Game Frontend
 
 on:
   push:
@@ -17,32 +17,33 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            set -euo pipefail
+            set -e
 
+            # Go to app folder
             cd ~/apps/game_factory_frontend
 
-            # Force working tree to exactly match origin/main.
-            # Avoids "divergent branches" errors when the server has stray local commits/merges.
-            git fetch --prune origin main
-            git reset --hard origin/main
-            git clean -fdx -e node_modules -e .next
+            # Clean local changes
+            git reset --hard
+            git clean -fd
 
+            # Pull latest code
+            git pull origin main
+
+            # Install dependencies and build
             npm ci
             npm run build
-
-            # Next.js standalone output expects static and public next to server.js
             mkdir -p .next/standalone/.next
-            rm -rf .next/standalone/.next/static
             cp -r .next/static .next/standalone/.next/static
             if [ -d public ]; then
-              rm -rf .next/standalone/public
               cp -r public .next/standalone/public
             fi
 
+            # Reload if PM2 process exists, else start it from ecosystem file
             if pm2 describe game_frontend > /dev/null 2>&1; then
               pm2 reload ecosystem.config.js --only game_frontend --update-env
             else
               pm2 start ecosystem.config.js --only game_frontend
             fi
 
+            # Save PM2 process list
             pm2 save
