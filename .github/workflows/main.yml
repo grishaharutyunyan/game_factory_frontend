@@ -1,4 +1,4 @@
-name: Deploy Cactus App Frontend
+name: Deploy Game Factory Frontend
 
 on:
   push:
@@ -17,6 +17,8 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e
+
             # Go to app folder
             cd ~/apps/game_factory_frontend
 
@@ -28,14 +30,19 @@ jobs:
             git pull origin main
 
             # Install dependencies and build
-            npm install
+            npm ci
             npm run build
+            mkdir -p .next/standalone/.next
+            cp -r .next/static .next/standalone/.next/static
+            if [ -d public ]; then
+              cp -r public .next/standalone/public
+            fi
 
-            # Reload if PM2 process exists, else start it
-            if pm2 list | grep -q game_service_frontend; then
-              pm2 reload game_service_frontend
+            # Reload if PM2 process exists, else start it from ecosystem file
+            if pm2 describe game_frontend > /dev/null 2>&1; then
+              pm2 reload ecosystem.config.js --only game_frontend --update-env
             else
-              pm2 start dist/main.js --name game_service_frontend
+              pm2 start ecosystem.config.js --only game_frontend
             fi
 
             # Save PM2 process list
