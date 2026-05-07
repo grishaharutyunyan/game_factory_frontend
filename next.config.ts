@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const frameAncestorOrigin = process.env.NEXT_PUBLIC_FRAME_ANCESTOR_ORIGIN
+const frameAncestors =
+    process.env.NEXT_PUBLIC_FRAME_ANCESTORS ||
+    process.env.NEXT_PUBLIC_FRAME_ANCESTOR_ORIGIN ||
+    "'self' https://*.livecactusstudio.tech";
 
 const nextConfig: NextConfig = {
     // Production
@@ -60,7 +63,7 @@ const nextConfig: NextConfig = {
                 headers: [
                     {
                         key: "Content-Security-Policy",
-                        value: `frame-ancestors 'self' ${frameAncestorOrigin}`,
+                        value: `frame-ancestors ${frameAncestors}`,
                     },
                     {
                         key: "X-Content-Type-Options",
