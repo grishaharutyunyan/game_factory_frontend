@@ -1,11 +1,15 @@
+const path = require('path');
+
 module.exports = {
   apps: [
     {
       name: 'game_frontend',
 
-      cwd: '/var/www/cherry_admin_frontend',
+      // Always run from the directory this ecosystem file lives in,
+      // so deploys to ~/apps/game_factory_frontend, /var/www/..., etc. all work.
+      cwd: __dirname,
 
-      script: '.next/standalone/server.js',
+      script: path.join(__dirname, '.next/standalone/server.js'),
 
       instances: 1,
       exec_mode: 'fork',
