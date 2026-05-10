@@ -30,17 +30,18 @@ const nextConfig: NextConfig = {
 
     // Experimental optimizations
     experimental: {
-        optimizePackageImports: [
-            "lucide-react",
-            "@mui/material",
-            "lodash",
-            "date-fns",
-        ],
+        optimizePackageImports: ["lucide-react"],
     },
 
-    // Next.js 16 uses Turbopack by default.
-    // Keep this explicit while retaining webpack config for webpack mode.
-    turbopack: {},
+    // Next.js 16 uses Turbopack by default for `next build`; mirror webpack fallbacks so
+    // client bundles do not try to resolve Node core modules (same intent as `webpack` below).
+    turbopack: {
+        resolveAlias: {
+            fs: { browser: "./empty-module.ts" },
+            net: { browser: "./empty-module.ts" },
+            tls: { browser: "./empty-module.ts" },
+        },
+    },
 
     // Webpack optimizations
     webpack: (config: { resolve: { fallback?: Record<string, boolean> } }, { isServer }: { isServer: boolean }) => {
