@@ -1,6 +1,6 @@
 "use client";
 
-import { io, Socket } from "socket.io-client";
+import {io, Socket} from "socket.io-client";
 import type {
   ClientEvents,
   ConnectionState,
@@ -121,9 +121,6 @@ export function createWebSocketClient(
     if (reason === "io server disconnect" || reason === "io client disconnect") {
       return;
     }
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[WebSocket] Disconnected:", reason);
-    }
   });
 
   socket.io.on("reconnect_attempt", (attempt) => {
@@ -175,7 +172,7 @@ export function createWebSocketClient(
     activeRoundId = null;
   });
 
-  const client: GameWebSocketClient = {
+  return {
     socket,
 
     connect: async (sessionId: string) => {
@@ -197,11 +194,6 @@ export function createWebSocketClient(
             code: "CONNECT_TIMEOUT",
             message: msg,
           };
-          if (process.env.NODE_ENV === "development") {
-            console.warn(
-              `[WebSocket] ${msg} Socket.IO connected=${String(socket.connected)} url=${fullUrl}`,
-            );
-          }
           socket.disconnect();
           reject(new Error(msg));
         }, handshakeTimeoutMs);
@@ -290,7 +282,7 @@ export function createWebSocketClient(
     gameAction: async (payload) => {
       if (!activeRoundId) {
         const err = new Error("No active game round");
-        lastError = { code: "GAME_ACTION_FAILED", message: err.message };
+        lastError = {code: "GAME_ACTION_FAILED", message: err.message};
         throw err;
       }
       try {
@@ -307,7 +299,7 @@ export function createWebSocketClient(
     finishGame: async () => {
       if (!activeRoundId) {
         const err = new Error("No active game round");
-        lastError = { code: "FINISH_GAME_FAILED", message: err.message };
+        lastError = {code: "FINISH_GAME_FAILED", message: err.message};
         throw err;
       }
       try {
@@ -378,8 +370,6 @@ export function createWebSocketClient(
       lastError = null;
     },
   };
-
-  return client;
 }
 
 export type { ConnectionState, GameWebSocketClient };

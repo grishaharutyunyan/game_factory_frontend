@@ -1,7 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { CardType } from '../types';
-import { Gem, Bomb, Star, Gift, Sparkles } from 'lucide-react';
+import { Gem, Star, Diamond, Sparkles } from 'lucide-react';
+
+const PARTICLE_POSITIONS = [
+    { left: '15%', top: '10%' }, { left: '80%', top: '15%' },
+    { left: '50%', top: '5%' },  { left: '10%', top: '60%' },
+    { left: '85%', top: '55%' }, { left: '25%', top: '85%' },
+    { left: '70%', top: '80%' }, { left: '55%', top: '45%' },
+];
 
 interface CardProps {
     index: number;
@@ -11,26 +18,20 @@ interface CardProps {
     onSelect: (index: number) => void;
     disabled: boolean;
     revealDelay?: number;
+    /** True when result === 'lose' and this card was selected — shows bomb explosion instead of card type */
+    isLoseSelected?: boolean;
 }
 
-export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onSelect, disabled, revealDelay = 0 }) => {
+export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onSelect, disabled, revealDelay = 0, isLoseSelected = false }) => {
     const getCardContent = () => {
         switch (type) {
             case CardType.GEM:
                 return {
-                    icon: <Gem className="w-14 h-14 md:w-16 md:h-16 text-cyan-300 drop-shadow-[0_0_20px_rgba(34,211,238,1)]" />,
-                    bgGradient: 'from-cyan-950/90 via-cyan-900/80 to-slate-900/90',
-                    borderColor: 'border-cyan-400/60',
-                    glowColor: 'shadow-[0_0_30px_rgba(34,211,238,0.6),inset_0_0_20px_rgba(34,211,238,0.1)]',
-                    particles: 'bg-cyan-400/20'
-                };
-            case CardType.BOMB:
-                return {
-                    icon: <Bomb className="w-14 h-14 md:w-16 md:h-16 text-red-400 drop-shadow-[0_0_20px_rgba(239,68,68,1)]" />,
-                    bgGradient: 'from-red-950/90 via-red-900/80 to-slate-900/90',
-                    borderColor: 'border-red-500/60',
-                    glowColor: 'shadow-[0_0_30px_rgba(239,68,68,0.6),inset_0_0_20px_rgba(239,68,68,0.1)]',
-                    particles: 'bg-red-400/20'
+                    icon: <Gem className="w-14 h-14 md:w-16 md:h-16 text-rose-300 drop-shadow-[0_0_20px_rgba(244,63,94,1)]" />,
+                    bgGradient: 'from-rose-950/90 via-rose-900/80 to-slate-900/90',
+                    borderColor: 'border-rose-400/60',
+                    glowColor: 'shadow-[0_0_30px_rgba(244,63,94,0.6),inset_0_0_20px_rgba(244,63,94,0.1)]',
+                    particles: 'bg-rose-400/20'
                 };
             case CardType.STAR:
                 return {
@@ -40,13 +41,13 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                     glowColor: 'shadow-[0_0_30px_rgba(250,204,21,0.6),inset_0_0_20px_rgba(250,204,21,0.1)]',
                     particles: 'bg-yellow-400/20'
                 };
-            case CardType.GIFT:
+            case CardType.CRYSTAL:
                 return {
-                    icon: <Gift className="w-14 h-14 md:w-16 md:h-16 text-purple-300 drop-shadow-[0_0_20px_rgba(192,132,252,1)]" />,
-                    bgGradient: 'from-purple-950/90 via-purple-900/80 to-slate-900/90',
-                    borderColor: 'border-purple-400/60',
-                    glowColor: 'shadow-[0_0_30px_rgba(192,132,252,0.6),inset_0_0_20px_rgba(192,132,252,0.1)]',
-                    particles: 'bg-purple-400/20'
+                    icon: <Diamond className="w-14 h-14 md:w-16 md:h-16 text-violet-300 drop-shadow-[0_0_20px_rgba(167,139,250,1)]" />,
+                    bgGradient: 'from-violet-950/90 via-violet-900/80 to-slate-900/90',
+                    borderColor: 'border-violet-400/60',
+                    glowColor: 'shadow-[0_0_30px_rgba(167,139,250,0.6),inset_0_0_20px_rgba(167,139,250,0.1)]',
+                    particles: 'bg-violet-400/20'
                 };
             default:
                 return null;
@@ -68,7 +69,7 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                 animate={{ rotateY: revealed ? 180 : 0 }}
                 transition={{ duration: 0.6, type: "spring", delay: revealed ? revealDelay : 0 }}
             >
-                {/* Front (Hidden) - Premium Glassmorphism Design */}
+                {/* Front (Hidden) */}
                 <div
                     className={`absolute inset-0 w-full h-full rounded-2xl flex items-center justify-center [backface-visibility:hidden] overflow-hidden
                         ${selected
@@ -77,19 +78,15 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                         backdrop-blur-sm transition-all duration-300
                     `}
                 >
-                    {/* Animated gradient overlay */}
                     <div className={`absolute inset-0 bg-gradient-to-tr ${selected ? 'from-yellow-500/10 via-transparent to-yellow-500/5' : 'from-slate-500/5 via-transparent to-slate-400/5'} opacity-50`} />
 
-                    {/* Decorative corner accents */}
                     <div className={`absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 rounded-tl-2xl ${selected ? 'border-yellow-400/60' : 'border-slate-500/30'}`} />
                     <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 rounded-br-2xl ${selected ? 'border-yellow-400/60' : 'border-slate-500/30'}`} />
 
-                    {/* Center question mark with glow */}
                     <div className="relative z-10">
                         <div className="text-5xl md:text-6xl font-black text-slate-400/30 drop-shadow-[0_0_10px_rgba(100,116,139,0.3)]">?</div>
                     </div>
 
-                    {/* Selection indicator with pulse animation */}
                     {selected && (
                         <motion.div
                             className="absolute top-3 right-3 w-5 h-5 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)]"
@@ -100,7 +97,6 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                         </motion.div>
                     )}
 
-                    {/* Shimmer effect */}
                     {!disabled && !revealed && (
                         <motion.div
                             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
@@ -110,42 +106,78 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                     )}
                 </div>
 
-                {/* Back (Revealed) - Enhanced with card-specific styling */}
-                {cardContent && (
+                {/* Back (Revealed) */}
+                {isLoseSelected ? (
+                    /* Bomb explosion effect for lose + selected cards */
+                    <div className="absolute inset-0 w-full h-full rounded-2xl border-2 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)] overflow-hidden bg-gradient-to-br from-red-950/90 via-orange-900/80 to-red-950/90 border-red-500/60 shadow-[0_0_40px_rgba(239,68,68,0.8),inset_0_0_20px_rgba(239,68,68,0.2)] backdrop-blur-sm">
+                        {/* Explosion ring */}
+                        <motion.div
+                            className="absolute inset-0 rounded-2xl border-4 border-orange-400/60"
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: [0.5, 1.3, 1], opacity: [0, 1, 0.6] }}
+                            transition={{ duration: 0.5, delay: revealDelay + 0.3 }}
+                        />
+
+                        {/* Particle bursts */}
+                        {[...Array(8)].map((_, i) => (
+                            <motion.div
+                                key={i}
+                                className="absolute w-2 h-2 rounded-full bg-orange-400"
+                                style={{ left: '50%', top: '50%' }}
+                                initial={{ x: 0, y: 0, opacity: 0 }}
+                                animate={{
+                                    x: Math.cos((i / 8) * Math.PI * 2) * 50,
+                                    y: Math.sin((i / 8) * Math.PI * 2) * 50,
+                                    opacity: [0, 1, 0],
+                                    scale: [0, 1.5, 0]
+                                }}
+                                transition={{ duration: 0.6, delay: revealDelay + 0.35 + i * 0.02 }}
+                            />
+                        ))}
+
+                        {/* Explosion emoji */}
+                        <motion.div
+                            initial={{ scale: 0, opacity: 0, rotate: -20 }}
+                            animate={{ scale: [0, 1.4, 1.1], opacity: [0, 1, 1], rotate: [-20, 10, 0] }}
+                            transition={{ duration: 0.5, delay: revealDelay + 0.3, type: 'spring', stiffness: 300 }}
+                            className="relative z-10 text-5xl md:text-6xl select-none"
+                        >
+                            💥
+                        </motion.div>
+
+                        <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 rounded-tl-2xl border-red-500/60 opacity-60" />
+                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 rounded-br-2xl border-red-500/60 opacity-60" />
+                    </div>
+                ) : cardContent ? (
+                    /* Normal card reveal */
                     <div
                         className={`absolute inset-0 w-full h-full rounded-2xl border-2 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)] overflow-hidden
                             bg-gradient-to-br ${cardContent.bgGradient} ${cardContent.borderColor} ${cardContent.glowColor}
                             backdrop-blur-sm
                         `}
                     >
-                        {/* Animated background particles */}
                         <div className="absolute inset-0 opacity-30">
-                            {[...Array(8)].map((_, i) => (
+                            {PARTICLE_POSITIONS.map((pos, i) => (
                                 <motion.div
                                     key={i}
                                     className={`absolute w-1 h-1 rounded-full ${cardContent.particles}`}
-                                    style={{
-                                        left: `${Math.random() * 100}%`,
-                                        top: `${Math.random() * 100}%`,
-                                    }}
+                                    style={pos}
                                     animate={{
                                         y: [0, -20, 0],
                                         opacity: [0.2, 0.8, 0.2],
                                         scale: [1, 1.5, 1]
                                     }}
                                     transition={{
-                                        duration: 2 + Math.random() * 2,
+                                        duration: 2 + (i % 3) * 0.7,
                                         repeat: Infinity,
-                                        delay: Math.random() * 2
+                                        delay: (i % 4) * 0.5
                                     }}
                                 />
                             ))}
                         </div>
 
-                        {/* Radial gradient overlay */}
                         <div className="absolute inset-0 bg-radial-gradient from-transparent via-transparent to-black/30" />
 
-                        {/* Icon with entrance animation */}
                         <motion.div
                             initial={{ scale: 0, rotate: -180 }}
                             animate={{ scale: 1, rotate: 0 }}
@@ -160,11 +192,10 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                             {cardContent.icon}
                         </motion.div>
 
-                        {/* Decorative corner accents */}
                         <div className={`absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 rounded-tl-2xl ${cardContent.borderColor} opacity-60`} />
                         <div className={`absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 rounded-br-2xl ${cardContent.borderColor} opacity-60`} />
                     </div>
-                )}
+                ) : null}
             </motion.div>
         </motion.div>
     );

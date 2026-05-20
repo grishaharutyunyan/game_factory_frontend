@@ -1,6 +1,6 @@
 /**
  * Type-safe WebSocket events for the game platform (server ↔ client).
- * Nine Card Mystery uses `game_action` with `{ position }` and `action_result` with `{ selected, canSubmit }`.
+ * Gem Strike uses `game_action` with `{ position }` and `action_result` with `{ selected, canSubmit }`.
  */
 
 import type { Socket } from "socket.io-client";
@@ -65,7 +65,7 @@ export type ServerEvents = {
     isFreeBet?: boolean;
   }) => void;
 
-  /** Nine Card Mystery shape */
+  /** Gem Strike shape */
   action_result: (data: {
     selected: number[];
     canSubmit: boolean;
@@ -74,16 +74,17 @@ export type ServerEvents = {
   }) => void;
 
   game_result: (data: {
-    result: string;
+    result: 'win' | 'lose';
     winAmount: number;
-    message: string;
     newBalance: number;
     realBalance?: number;
     bonusBalance?: number;
     activeBalanceType?: BalanceTypeWs;
-    cards?: unknown[];
-    selected?: number[];
-    seed?: string;
+    data?: {
+      cards: string[];
+      selected: number[];
+      seed: string;
+    };
   }) => void;
 
   balance_switched: (data: {
@@ -113,7 +114,7 @@ export type ClientEvents = {
       balanceType?: BalanceTypeWs;
     },
   ];
-  /** Nine Card Mystery */
+  /** Gem Strike */
   game_action: [data: { position: number }];
   /** Use explicit undefined so Socket.IO accepts `emit("finish_game")` under strict tuples */
   finish_game: [payload?: void];

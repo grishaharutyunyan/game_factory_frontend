@@ -31,7 +31,6 @@ const baseInitialState: GameState = {
     roundId: null,
     winAmount: 0,
     message: '',
-    history: [],
     timer: 0,
     expiresAt: 0,
 };
@@ -107,12 +106,6 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
         clientRef.current = client;
         const socket = client.socket;
 
-        socket.onAny((event, ...args) => {
-            if (process.env.NODE_ENV === 'development') {
-                console.log('[EVENT RECEIVED]', event, args);
-            }
-        });
-
         const onConnectError = (err: Error) => {
             setState((prev) => ({
                 ...prev,
@@ -165,6 +158,8 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
                 activeBalanceType: wsBalanceTypeToEnum(data.activeBalanceType, prev.activeBalanceType),
                 error: undefined,
                 freebetEnabled,
+                minBet: (data.config as { minBet?: number })?.minBet ?? prev.minBet,
+                maxBet: (data.config as { maxBet?: number })?.maxBet ?? prev.maxBet,
             }));
 
             if (!data.config) {
@@ -178,7 +173,12 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
 
         const onGameConfig = (data: GameConfigPayload) => {
             const freebetEnabled = !!data.freebetEnabled;
-            setState((prev) => ({ ...prev, freebetEnabled }));
+            setState((prev) => ({
+                ...prev,
+                freebetEnabled,
+                minBet: data.minBet ?? prev.minBet,
+                maxBet: data.maxBet ?? prev.maxBet,
+            }));
             if (freebetEnabled) void client.getFreebetStatus().catch(() => {});
         };
 
@@ -237,7 +237,7 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
                 message: 'Pick 3 cards!',
                 timer: data.timer ?? 30,
                 expiresAt,
-                isFreeBet: !!data.isFreeBet,
+                isFreeBet: data.isFreeBet,
                 error: undefined,
             }));
         };
@@ -279,13 +279,16 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
         client.on('action_result', onActionResult);
 
         const onGameResult = (data: GameResultEvent) => {
-            const fullCards = (data.cards as CardType[] | undefined) || [];
+            const resultData = data.data;
+            const fullCards = (resultData?.cards as CardType[] | undefined) || [];
+            const resultValue: 'win' | 'lose' = data.result === 'win' ? 'win' : 'lose';
 
             setState((prev) => ({
                 ...prev,
                 status: GameStatus.FINISHED,
+                result: resultValue,
                 winAmount: data.winAmount,
-                message: data.message,
+                message: '',
                 balance: data.newBalance,
                 realBalance: data.realBalance ?? prev.realBalance,
                 bonusBalance: data.bonusBalance ?? prev.bonusBalance,
@@ -293,11 +296,11 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
                     ? wsBalanceTypeToEnum(data.activeBalanceType, prev.activeBalanceType)
                     : prev.activeBalanceType,
                 cards: fullCards,
-                selectedIndices: (data.selected as number[] | undefined) || prev.selectedIndices,
+                selectedIndices: (resultData?.selected as number[] | undefined) || prev.selectedIndices,
             }));
 
             void client.getFreebetStatus().catch(() => {});
-            if (data.winAmount > 0) playSound('win');
+            if (resultValue === 'win') playSound('win');
             else playSound('lose');
         };
 
@@ -390,7 +393,7 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
             sendLeaveAndDisconnect();
             clientRef.current = null;
         };
-    }, [sessionId]);
+    }, [playSound, sessionId]);
 
     useEffect(() => {
         let interval: NodeJS.Timeout;

@@ -80,10 +80,10 @@ export const Timer: React.FC<TimerProps> = ({ seconds, maxSeconds = 30 }) => {
                     cy="50"
                     r="40"
                     fill="none"
-                    stroke={`url(#gradient-${seconds})`}
+                    stroke="url(#timer-gradient)"
                     strokeWidth="6"
                     strokeLinecap="round"
-                    strokeDasharray="251" // 2 * PI * 40
+                    strokeDasharray="251"
                     initial={{ strokeDashoffset: 0 }}
                     animate={{
                         strokeDashoffset: 251 - (251 * progress) / 100,
@@ -91,9 +91,8 @@ export const Timer: React.FC<TimerProps> = ({ seconds, maxSeconds = 30 }) => {
                     transition={{ duration: 1, ease: "linear" }}
                 />
 
-                {/* Gradient definition */}
                 <defs>
-                    <linearGradient id={`gradient-${seconds}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                    <linearGradient id="timer-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                         <stop offset="0%" stopColor={colorScheme.primary} />
                         <stop offset="100%" stopColor={colorScheme.secondary} />
                     </linearGradient>

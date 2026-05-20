@@ -1,8 +1,7 @@
 export enum CardType {
     GEM = 'gem',
-    BOMB = 'bomb',
     STAR = 'star',
-    GIFT = 'gift',
+    CRYSTAL = 'crystal',
 }
 
 export enum GameStatus {
@@ -24,22 +23,20 @@ export interface GameState {
     bonusBalance: number;
     activeBalanceType: BalanceType;
     bet: number;
-    cards: CardType[]; // Full array of 9 cards (revealed at end)
+    minBet?: number;
+    maxBet?: number;
+    cards: CardType[];
     selectedIndices: number[];
     roundId: string | null;
     winAmount: number;
+    result?: 'win' | 'lose';
     message: string;
-    history: GameHistoryItem[];
     timer: number;
     expiresAt?: number;
     error?: string;
-    /** Free bet: current round was started with a freebet */
     isFreeBet?: boolean;
-    /** Game supports free bet (from game_config) */
     freebetEnabled?: boolean;
-    /** How many freebets the user has left (from freebet_status) */
     remainingFreebets?: number;
-    /** Eligible grants from freebet_status; send grant id with start_game when using freebet */
     freebetGrants?: FreebetGrant[];
 }
 
@@ -54,13 +51,6 @@ export interface FreebetGrant {
     remainingCount: number;
 }
 
-export interface GameHistoryItem {
-    roundId: string;
-    result: string;
-    winAmount: number;
-    timestamp: number;
-}
-
 export interface ConnectPayload {
     balance: number;
     realBalance?: number;
@@ -68,7 +58,7 @@ export interface ConnectPayload {
     activeBalanceType?: BalanceType;
     userId: string;
     gameId: string;
-    config: any;
+    config: never;
 }
 
 /** Response to get_game_config. freebetEnabled: show "Use freebet" when user has freebets. */
@@ -106,9 +96,8 @@ export interface ActionResultPayload {
 }
 
 export interface GameResultPayload {
-    result: string;
+    result: 'win' | 'lose';
     winAmount: number;
-    message: string;
     newBalance: number;
     realBalance?: number;
     bonusBalance?: number;
