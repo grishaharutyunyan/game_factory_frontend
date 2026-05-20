@@ -27,27 +27,27 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
         switch (type) {
             case CardType.GEM:
                 return {
-                    icon: <Gem className="w-16 h-16 md:w-16 md:h-16 text-rose-300 drop-shadow-[0_0_20px_rgba(244,63,94,1)]" />,
-                    bgGradient: 'from-rose-800/95 via-rose-700/85 to-slate-800/95',
+                    icon: <Gem className="w-14 h-14 md:w-16 md:h-16 text-rose-300 drop-shadow-[0_0_20px_rgba(244,63,94,1)]" />,
+                    bgGradient: 'from-rose-950/90 via-rose-900/80 to-slate-900/90',
                     borderColor: 'border-rose-400/60',
-                    glowColor: 'shadow-[0_0_30px_rgba(244,63,94,0.6),inset_0_0_20px_rgba(244,63,94,0.2)]',
-                    particles: 'bg-rose-400/40'
+                    glowColor: 'shadow-[0_0_30px_rgba(244,63,94,0.6),inset_0_0_20px_rgba(244,63,94,0.1)]',
+                    particles: 'bg-rose-400/20'
                 };
             case CardType.STAR:
                 return {
-                    icon: <Star className="w-16 h-16 md:w-16 md:h-16 text-yellow-300 fill-current drop-shadow-[0_0_20px_rgba(250,204,21,1)]" />,
-                    bgGradient: 'from-yellow-800/95 via-yellow-700/85 to-slate-800/95',
+                    icon: <Star className="w-14 h-14 md:w-16 md:h-16 text-yellow-300 fill-current drop-shadow-[0_0_20px_rgba(250,204,21,1)]" />,
+                    bgGradient: 'from-yellow-950/90 via-yellow-900/80 to-slate-900/90',
                     borderColor: 'border-yellow-400/60',
-                    glowColor: 'shadow-[0_0_30px_rgba(250,204,21,0.6),inset_0_0_20px_rgba(250,204,21,0.2)]',
-                    particles: 'bg-yellow-400/40'
+                    glowColor: 'shadow-[0_0_30px_rgba(250,204,21,0.6),inset_0_0_20px_rgba(250,204,21,0.1)]',
+                    particles: 'bg-yellow-400/20'
                 };
             case CardType.CRYSTAL:
                 return {
-                    icon: <Diamond className="w-16 h-16 md:w-16 md:h-16 text-violet-300 drop-shadow-[0_0_20px_rgba(167,139,250,1)]" />,
-                    bgGradient: 'from-violet-800/95 via-violet-700/85 to-slate-800/95',
+                    icon: <Diamond className="w-14 h-14 md:w-16 md:h-16 text-violet-300 drop-shadow-[0_0_20px_rgba(167,139,250,1)]" />,
+                    bgGradient: 'from-violet-950/90 via-violet-900/80 to-slate-900/90',
                     borderColor: 'border-violet-400/60',
-                    glowColor: 'shadow-[0_0_30px_rgba(167,139,250,0.6),inset_0_0_20px_rgba(167,139,250,0.2)]',
-                    particles: 'bg-violet-400/40'
+                    glowColor: 'shadow-[0_0_30px_rgba(167,139,250,0.6),inset_0_0_20px_rgba(167,139,250,0.1)]',
+                    particles: 'bg-violet-400/20'
                 };
             default:
                 return null;
@@ -109,7 +109,7 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                 {/* Back (Revealed) */}
                 {isLoseSelected ? (
                     /* Bomb explosion effect for lose + selected cards */
-                    <div className="absolute inset-0 w-full h-full rounded-2xl border-2 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)] overflow-hidden bg-gradient-to-br from-red-800/95 via-orange-700/85 to-red-800/95 border-red-500/60 shadow-[0_0_40px_rgba(239,68,68,0.8),inset_0_0_20px_rgba(239,68,68,0.2)]">
+                    <div className="absolute inset-0 w-full h-full rounded-2xl border-2 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)] overflow-hidden bg-gradient-to-br from-red-950/90 via-orange-900/80 to-red-950/90 border-red-500/60 shadow-[0_0_40px_rgba(239,68,68,0.8),inset_0_0_20px_rgba(239,68,68,0.2)] backdrop-blur-sm">
                         {/* Explosion ring */}
                         <motion.div
                             className="absolute inset-0 rounded-2xl border-4 border-orange-400/60"
@@ -153,6 +153,7 @@ export const Card: React.FC<CardProps> = ({ index, type, revealed, selected, onS
                     <div
                         className={`absolute inset-0 w-full h-full rounded-2xl border-2 flex items-center justify-center [backface-visibility:hidden] [transform:rotateY(180deg)] overflow-hidden
                             bg-gradient-to-br ${cardContent.bgGradient} ${cardContent.borderColor} ${cardContent.glowColor}
+                            backdrop-blur-sm
                         `}
                     >
                         <div className="absolute inset-0 opacity-30">

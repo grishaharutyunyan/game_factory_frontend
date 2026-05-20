@@ -35,7 +35,7 @@ export const Board: React.FC<BoardProps> = ({ cards, selectedIndices, status, on
                 )}
             </AnimatePresence>
 
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-6 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70 rounded-3xl border-2 border-slate-700/50 backdrop-blur-md shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_0_40px_rgba(100,116,139,0.05)]">
+            <div className="grid grid-cols-3 gap-2 md:gap-4 p-3 md:p-6 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70 rounded-3xl border-2 border-slate-700/50 backdrop-blur-md shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_0_40px_rgba(100,116,139,0.05)]">
                 {Array.from({ length: 9 }).map((_, i) => {
                     const isFinished = status === GameStatus.FINISHED;
                     const isSelected = selectedIndices.includes(i);
