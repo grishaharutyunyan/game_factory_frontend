@@ -470,10 +470,19 @@ export const useNineCardGame = (_token: string, sessionId: string) => {
             if (state.selectedIndices.length >= 3) return;
 
             playSound('click');
+            setState((prev) => ({
+                ...prev,
+                selectedIndices: prev.selectedIndices.includes(index)
+                    ? prev.selectedIndices
+                    : [...prev.selectedIndices, index],
+            }));
             try {
                 await client.gameAction({ position: index });
             } catch {
-                // No active round or disconnected; ignore click
+                setState((prev) => ({
+                    ...prev,
+                    selectedIndices: prev.selectedIndices.filter((i) => i !== index),
+                }));
             }
         },
         [state.status, state.selectedIndices, playSound],
